@@ -5,10 +5,10 @@ const superAdminAuth = require("../middleware/super_admin_middleware");
 const auth = require("../middleware/deliveryguyauth");
 
 //==============Seeding===============
-// if (process.env.NODE_ENV != "prod") {
-//   const deliveryGuy_seed = require("../seeds/deliveryGuy_seed");
-//   deliveryGuy_seed();
-// }
+if (process.env.NODE_ENV != "production") {
+  const deliveryGuy_seed = require("../seeds/deliveryGuy_seed");
+  deliveryGuy_seed();
+}
 
 //===========ROUTES==================================
 
@@ -59,6 +59,69 @@ router.get("/", superAdminAuth, async (req, res) => {
 });
 
 //Route to create deliveryGuy. Requires superadmin authentication
+
+/**
+ * @swagger
+ * path:
+ *  /deliveryguy:
+ *    post:
+ *      summary: create a new deliveryguy
+ *      tags: [DeliveryGuy]
+ *
+ *      requestBody:
+ *        description: needs all the info about the deliveryguy
+ *        required: true
+ *
+ *        content:
+ *          application/json:
+ *            schema:
+ *              type: object
+ *              required:
+ *                - super
+ *                - restaurant
+ *              properties:
+ *                super:
+ *                 type: object
+ *                 properties:
+ *                   username:
+ *                     type: string
+ *                   password:
+ *                     type: string
+ *                     format: password
+ *                deliveryGuy:
+ *                  type: object
+ *                  required:
+ *                    - name
+ *                    - phone
+ *                    - username
+ *                    - password
+ *                  properties:
+ *                    name:
+ *                      type: string
+ *                    phone:
+ *                      type: string
+ *                    username:
+ *                      type: string
+ *                    password:
+ *                      type: string
+ *                      description: minimum length of password must be 7
+ *              example:
+ *                super:
+ *                  username: admin
+ *                  password: password
+ *                deliveryGuy:
+ *                  name: deliveryGuy 1
+ *                  phone: 8889998899
+ *                  username: dguy1
+ *                  password: "12345678"
+ *      responses:
+ *        "201":
+ *          description: deliveryGuy Created
+ *        "500":
+ *          description: internal server error occured
+ */
+
+
 router.post("/", superAdminAuth, async (req, res) => {
   const deliveryGuy = new DeliveryGuy(req.body.deliveryGuy);
   try {
@@ -91,15 +154,19 @@ router.post("/", superAdminAuth, async (req, res) => {
  *              required:
  *                - password
  *                - username
+ *                - regToken
  *              properties:
  *                username:
  *                  type: string
  *                password:
  *                  type: string
  *                  format: password
+ *                regToken:
+ *                  type: string
  *              example:
  *                username: dguy1
  *                password: "12345678"
+ *                regToken: "abcd"
  *
  *      responses:
  *        "200":
@@ -127,6 +194,11 @@ router.post("/login", async (req, res) => {
       req.body.username,
       req.body.password
     );
+    if(req.body.regToken)
+    {
+      deliveryGuy.regToken = req.body.regToken
+      await deliveryGuy.save()
+    }
     const token = await deliveryGuy.generateAuthToken();
     res.send({ deliveryGuy, token });
   } catch (e) {
@@ -156,7 +228,7 @@ router.post("/login", async (req, res) => {
 
 router.post("/logout", auth, async (req, res) => {
   try {
-    req.user.tokens = req.user.tokens.filter(token => {
+    req.user.tokens = req.user.tokens.filter((token) => {
       return token.token !== req.token;
     });
     await req.user.save();
@@ -266,7 +338,7 @@ router.get("/me", auth, async (req, res) => {
 router.patch("/me", auth, async (req, res) => {
   const updates = Object.keys(req.body);
   const allowedUpdates = ["phone", "password"]; //Updates allowed for deliveryGuy
-  const isValidOperation = updates.every(update =>
+  const isValidOperation = updates.every((update) =>
     allowedUpdates.includes(update)
   );
 
@@ -275,7 +347,7 @@ router.patch("/me", auth, async (req, res) => {
   }
 
   try {
-    updates.forEach(update => (req.user[update] = req.body[update]));
+    updates.forEach((update) => (req.user[update] = req.body[update]));
     await req.user.save();
     res.status(200).send(req.user);
   } catch (e) {
@@ -292,4 +364,16 @@ router.delete("/me", auth, async (req, res) => {
     res.status(500).send();
   }
 });
+
+//post request for registration token
+router.post("/regToken",auth,async(req, res)=>{
+  try {
+    req.user.regToken = req.body.regToken
+    await req.user.save()
+    res.status(200).send(req.user)
+  } catch (e) {
+    res.status(500).send(e)
+  }
+})
+
 module.exports = router;

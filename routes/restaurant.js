@@ -4,14 +4,15 @@ const multer = require("multer");
 const sharp = require("sharp");
 const Restaurant = require("../models/restaurant");
 const Food = require("../models/food");
+const Order = require("../models/order");
 const superAdminAuth = require("../middleware/super_admin_middleware");
 const auth = require("../middleware/restauth");
 
 //==============Seeding===============
-// if (process.env.NODE_ENV != "prod") {
-//   const restaurant_seed = require("../seeds/restaurant_seed");
-//   restaurant_seed();
-// }
+if (process.env.NODE_ENV != "production") {
+  const restaurant_seed = require("../seeds/restaurant_seed");
+  restaurant_seed();
+}
 
 //Function to upload picture of restaurant
 const upload = multer({
@@ -232,7 +233,7 @@ router.get("/", (req, res) => {
  *
  *      responses:
  *        "201":
- *          description: Restaurant Created
+ *          description: DeliveryGuy Created
  *        "500":
  *          description: internal server error occured
  */
@@ -475,6 +476,155 @@ router.patch("/", auth, async (req, res) => {
   }
 });
 
+//Timestamps
+
+// const currentTS = ()=>{
+//   let ts = Date.now();
+//   // timestamp in seconds
+//   console.log( "currentTS- "+ Math.floor(ts/1000));
+
+//   return Math.floor(ts/1000)
+// }
+
+// const orderTS = (str)=>{
+//   var myDate = new Date(str);
+//   var orderts = myDate.getTime();
+//   console.log("OrderTS- " +Math.floor(orderts/1000));
+//   return Math.floor(orderts/1000)
+// }
+
+//Route sor notification
+
+/**
+ * @swagger
+ * path:
+ *  /restaurant/notify:
+ *    get:
+ *      summary: Route to get details of latest orders
+ *      tags: [Restaurant]
+ *      security:
+ *        - bearerAuth: []
+ *
+ *      responses:
+ *        "200":
+ *          description: Details Successfully fetched
+ *          content:
+ *            application/json:
+ *              schema:
+ *                type: object
+ *                properties:
+ *                  restaurant:
+ *                    type: object
+ *                    properties:
+ *                      _id:
+ *                        type: string
+ *                        description: ObjectId of Restaurant
+ *                      name:
+ *                        type: string
+ *                        description: Name of the Restaurant
+ *                  user:
+ *                    type: object
+ *                    properties:
+ *                      _id:
+ *                        type: string
+ *                        description: ObjectId of User
+ *                      name:
+ *                         type: string
+ *                         description: Name of the User
+ *                  deliveryGuy:
+ *                    type: object
+ *                    properties:
+ *                      _id:
+ *                        type: string
+ *                  payment:
+ *                    type: object
+ *                    properties:
+ *                      status:
+ *                        type: string
+ *                        description: Payment status of the order i.e. "UNPAID", "PAID"
+ *                      total:
+ *                        type: number
+ *                        description: Total amount of the order to be paid
+ *                      method:
+ *                        type: string
+ *                        description: Mode of payment i.e. "COD", "UPI", "CARD"
+ *                  status:
+ *                    type: string
+ *                    decription: Status of the order i.e. "RECIEVED", "LEFT", "DELIVERED", "CANCELED"
+ *                  _id:
+ *                    type: string
+ *                    description: ObjectId of Order
+ *                  foods:
+ *                    type: array
+ *                    items:
+ *                      type: object
+ *                      properties:
+ *                        quantity:
+ *                          type: number
+ *                          description:
+ *                        _id:
+ *                          type: string
+ *                          description: ObjectId of Food
+ *                        price:
+ *                          type: number
+ *                          description: Price of the food
+ *                        name:
+ *                          type: string
+ *                          description: Name of the Food
+ *
+ *        "500":
+ *          description: An error occured
+ */
+
+router.get("/notify", auth, async (req, res) => {
+  try {
+    var restaurant = req.user;
+    var result = await restaurant.populate("orders").execPopulate();
+    var data = [];
+    console.log(result.orders);
+    result.orders.forEach(async (order) => {
+      if (!order.restNotification) {
+        data.push(order);
+        await Order.findByIdAndUpdate(
+          { _id: order._id },
+          {
+            restNotification: true,
+          },
+          (err, res) => {
+            if (err) {
+              console.log(err);
+            } else {
+              console.log(res);
+            }
+          }
+        );
+      }
+    });
+    res.status(200).send(data);
+  } catch (e) {
+    console.log(e);
+    res.status(500).send(e);
+  }
+
+  // try {
+  //   // const orders = await Order.find({})
+  //   var rest = req.user
+  //   var result = await rest.populate('orders').execPopulate()
+  //   var data = []
+  //   result.orders.forEach((order)=>{
+  //     if( currentTS()-120 <= orderTS(order.createdAt)){
+  //       data.push(order)
+  //       console.log("pushed")
+  //     }
+  //   })
+  //   // console.log(data)
+  //   res.status(200).send(data)
+  // } catch (error) {
+  //   console.log(error)
+  //   res.status(400).send(error)
+  // }
+});
+
 // get the details of the restaurant for details page
 
 /**
@@ -529,12 +679,13 @@ router.get("/:_id", async (req, res) => {
     }
 
     res.status(200).json({
-      _id: restaurant._id,
-      name: restaurant.name,
-      contactNos: restaurant.contactNos,
-      address: restaurant.address,
-      foods: restaurant.foods,
-      image: restaurant.image,
+      restaurant: restaurant,
+      // _id: restaurant._id,
+      // name: restaurant.name,
+      // contactNos: restaurant.contactNos,
+      // address: restaurant.address,
+      // foods: restaurant.foods,
+      // image: base64ArrayBuffer(restaurant.image)
     });
   } catch (error) {
     res.status(500).json(error);
